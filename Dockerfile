@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 # 安装 Python 依赖
 COPY --from=python-build /usr/src/app/wheels /wheels/
-RUN pip install --no-cache-dir setuptools \
+RUN pip install --no-cache-dir 'setuptools>=68.0.0,<72.0.0' \
     && pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
 
