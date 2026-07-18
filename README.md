@@ -41,14 +41,17 @@
 git clone -b dev_1.0 https://github.com/yueyoue/music-tag-web.git
 cd music-tag-web
 
-# 修改 docker-compose.feiniu.yml 中的音乐目录
-# 将 /vol2/1000/音乐 改为你的音乐文件夹路径
+# 修改 docker-compose.yml 中的音乐目录
+# 将 /path/to/your/music 改为你的音乐文件夹路径
 
-# 启动
-docker compose -f docker-compose.feiniu.yml up -d --build
+# 启动（首次会自动构建镜像）
+docker compose up -d
 ```
 
 启动后访问 `http://你的IP:8002`
+
+> 飞牛 NAS 用户可直接使用 `docker-compose.feiniu.yml`：
+> `docker compose -f docker-compose.feiniu.yml up -d --build`
 
 ### 方式二：Docker 单容器
 

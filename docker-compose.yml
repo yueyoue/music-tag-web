@@ -3,83 +3,73 @@ version: '3'
 services:
   django:
     build: .
-    image: music-tag-web:latest
     container_name: music-tag-web
-    expose:
-      - "8001"
+    ports:
+      - "8002:8002"
     volumes:
-      - ./media:/app/media  # 配置本地音乐文件夹，按需修改
+      - /path/to/your/music:/app/media:z  # 改为你的音乐文件夹路径
     restart: always
     environment:
-      dockerrun: "yes"
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: music3
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme  # 建议修改密码
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - redis
       - db
-    networks:
-      - internal
     command: /start
   celeryworker:
-    image: music-tag-web:latest
-    container_name: music_celeryworker
-    environment:
-      dockerrun: "yes"
-    ports: []
+    build: .
+    container_name: music-celery-worker
     volumes:
-      - ./media:/app/media
-    networks:
-      - internal
+      - /path/to/your/music:/app/media:z  # 同上
+    restart: always
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: music3
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - redis
       - db
     command: /start-celeryworker
   celerybeat:
-    image: music-tag-web:latest
-    container_name: music_celerybeat
+    build: .
+    container_name: music-celery-beat
+    restart: always
     environment:
-      dockerrun: "yes"
-    ports: []
-    networks:
-      - internal
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: music3
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - redis
       - db
     command: /start-celerybeat
   redis:
-    image: redis:latest
+    image: redis:7-alpine
+    container_name: music-redis
     restart: always
-    container_name: music_redis
-    networks:
-      - internal
-    expose:
-      - "6379"
   db:
-    image: mysql:latest
+    image: mysql:8.0
+    container_name: music-mysql
     restart: always
     environment:
+      MYSQL_ROOT_PASSWORD: changeme  # 建议修改密码
       MYSQL_DATABASE: music3
-      MYSQL_ROOT_PASSWORD: "123456"
     volumes:
       - mysql_data:/var/lib/mysql
-    networks:
-      - internal
-    expose:
-      - "3306"
-  nginx:
-    image: nginx:latest
-    restart: always
-    container_name: music_nginx
-    ports:
-      - "9150:80"
-    networks:
-      - internal
-    depends_on:
-      - django
-    volumes:
-      - ./compose/local/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./media:/app/media
-
-networks:
-  internal:
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   mysql_data:
