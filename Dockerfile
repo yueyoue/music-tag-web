@@ -36,8 +36,6 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 setuptools（gunicorn 依赖 pkg_resources）
-RUN pip install --no-cache-dir setuptools
 # 安装 Python 依赖
 COPY --from=python-build /usr/src/app/wheels /wheels/
 RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \

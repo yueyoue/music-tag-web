@@ -8,7 +8,7 @@ django-filter==2.0.0
 djangorestframework==3.8.1
 python-dateutil==2.8.2
 requests==2.31.0
-gunicorn==20.1.0
+gunicorn==22.0.0
 gevent==21.12.0
 djangorestframework-jwt==1.11.0
 music-tag==0.4.3
