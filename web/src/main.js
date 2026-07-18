@@ -56,7 +56,7 @@ Vue.prototype.setCookie = function(name, value, day) {
         const curTamp = curDate.getTime()
         const curWeeHours = new Date(curDate.toLocaleDateString()).getTime() - 1
         const passedTamp = curTamp - curWeeHours
-        const leftTamp = 7 * 24 * 60 * 60 * 1000 - passedTamp
+        const leftTamp = 24 * 60 * 60 * 1000 - passedTamp
         const leftTime = new Date()
         leftTime.setTime(leftTamp + curTamp)
         document.cookie = name + '=' + escape(value) + ';expires=' + leftTime.toGMTString()
@@ -78,7 +78,7 @@ Validator.extend('integer', {
     validate: value => Number(value) >= 1 && Number(value) % 1 === 0
 })
 /* eslint-disable no-new */
-new Vue({
+const vue = new Vue({
     el: '#app',
     router,
     store,
@@ -90,3 +90,4 @@ new Vue({
     },
     template: '<App/>'
 })
+export default vue

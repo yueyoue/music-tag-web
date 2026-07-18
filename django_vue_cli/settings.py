@@ -9,7 +9,7 @@ sys.path.insert(1, os.path.join(os.getcwd(), 'lib'))
 
 SECRET_KEY = 'django-insecure-u5_r=pekio0@zt!y(kgbufuosb9mddu8*qeejkzj@=7uyvb392'
 
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 CORS_ALLOW_CREDENTIALS = True
@@ -19,6 +19,7 @@ CORS_ORIGIN_WHITELIST = [
 ]
 
 INSTALLED_APPS = [
+    'simpleui',
     "corsheaders",
     'django.contrib.admin',
     'django.contrib.auth',
@@ -27,12 +28,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "rest_framework",
+    "rest_framework_swagger",
     "applications.task",
     "applications.user",
     "applications.music",
     "applications.subsonic",
     # "django_extensions",
-
 ]
 
 MIDDLEWARE = [
@@ -76,22 +77,22 @@ else:
     MYSQL_HOST = "127.0.0.1"
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-    }
-}
 # DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.mysql",
-#         "NAME": 'music3',  # noqa
-#         "USER": "root",
-#         "PASSWORD": "123456",
-#         "HOST": MYSQL_HOST,
-#         "PORT": "3306",
-#     },
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+#     }
 # }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": 'music3',  # noqa
+        "USER": "root",
+        "PASSWORD": "123456",
+        "HOST": MYSQL_HOST,
+        "PORT": "3306",
+    },
+}
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
 
@@ -121,7 +122,7 @@ STATIC_ROOT = 'static'
 # STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-IS_USE_CELERY = False
+IS_USE_CELERY = True
 
 if IS_USE_CELERY:
     BROKER_URL = f"redis://{REDIS_HOST}:6379/1"
@@ -156,19 +157,98 @@ REST_FRAMEWORK = {
 
 JWT_AUTH = {
     # 过期时间，生成的took七天之后不能使用
-    'JWT_EXPIRATION_DELTA': datetime.timedelta(days=7),
+    'JWT_EXPIRATION_DELTA': datetime.timedelta(days=1),
     # 刷新时间 之后的token时间值
-    'JWT_ALLOW_REFRESH': True,
-    'JWT_REFRESH_EXPIRATION_DELTA': datetime.timedelta(days=7),
+    # 'JWT_ALLOW_REFRESH': True,
+    'JWT_REFRESH_EXPIRATION_DELTA': datetime.timedelta(days=1),
     # 请求头携带的参数
-    'JWT_AUTH_HEADER_PREFIX': 'JWT'
+    'JWT_AUTH_HEADER_PREFIX': 'JWT',
 }
 BASE_URL = "https://music.163.com/"
 REVERSE_PROXY_TYPE = "nginx"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 SUBSONIC_DEFAULT_TRANSCODING_FORMAT = "mp3"
-SITE_LOGIN = os.getenv("SITE_LOGIN", "true")
+
+# simpleui
+SIMPLEUI_DEFAULT_THEME = 'ant.design.css'
+SIMPLEUI_HOME_PAGE = '/'
+SIMPLEUI_HOME_TITLE = '首页'
+
+
+# SIMPLEUI_LOGO = "/static/dist/img/music-tag.png"
+SIMPLEUI_ANALYSIS = False
+SIMPLEUI_CONFIG = {
+    'system_keep': False,
+    'menu_display': ['首页', '音乐管理', '用户管理'],
+    'dynamic': False,
+    'menus': [
+        {
+            'name': '用户管理',
+            'icon': 'fa fa-fw fa-home',
+            "newTab": False,
+            "models": [
+                {
+                    'name': 'Subsonic用户',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/user/userprofile/"
+                },
+                {
+                    'name': '用户',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/auth/user/"
+                }
+            ]
+        },
+        {
+            'name': '音乐管理',
+            'icon': 'fa fa-fw fa-home',
+            "newTab": False,
+            "models": [
+                {
+                    'name': '专辑',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/album/"
+                },
+                {
+                    'name': '歌曲',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/track/"
+                },
+                {
+                    'name': '艺术家',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/artist/"
+                },
+                {
+                    'name': '图片附件',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/attachment/"
+                },
+                {
+                    'name': '音乐风格',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/genre/"
+                },
+                {
+                    'name': '文件目录',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/folder/"
+                },
+                {
+                    'name': '喜爱列表',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/trackfavorite/"
+                },
+                {
+                    'name': '播放列表',
+                    'icon': 'fa fa-user',
+                    "url": "/admin/music/playlist/"
+                }
+            ]
+        }
+    ]
+}
 try:
     from local_settings import *  # noqa
 except ImportError:

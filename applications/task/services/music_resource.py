@@ -1,11 +1,5 @@
 import requests
-import base64
 
-from applications.task.services.acoust import AcoustidClient
-from applications.task.services.kugou import KugouClient
-from applications.task.services.kuwo import KuwoClient
-from applications.task.services.qm import QQMusicApi
-from applications.task.services.smart_tag_resource import SmartTagClient
 from applications.task.utils import timestamp_to_dt
 from applications.utils.send import send
 
@@ -19,31 +13,13 @@ class MusicResource:
             return NetEaseMusicClient()
         elif info == "migu":
             return MiGuMusicClient()
-        elif info == "qmusic":
-            return QmusicClient()
-        elif info == "kugou":
-            return KugouClient()
-        elif info == "kuwo":
-            return KuwoClient()
-        elif info == "acoustid":
-            return AcoustidClient()
-        elif info == "smart_tag":
-            return SmartTagClient()
         raise Exception("暂不支持该音乐平台")
 
     def fetch_lyric(self, song_id):
-        try:
-            return self.resource.fetch_lyric(song_id)
-        except Exception as e:
-            print("音乐平台歌词获取失败", e)
-            return ""
+        return self.resource.fetch_lyric(song_id)
 
     def fetch_id3_by_title(self, title):
-        try:
-            return self.resource.fetch_id3_by_title(title)
-        except Exception as e:
-            print("音乐平台搜索失败", e)
-            return []
+        return self.resource.fetch_id3_by_title(title)
 
 
 class NetEaseMusicClient:
@@ -56,21 +32,17 @@ class NetEaseMusicClient:
 
     def fetch_id3_by_title(self, title):
         data = send({'s': title, 'type': '1', 'limit': '10', 'offset': '0'}).POST("weapi/cloudsearch/get/web")
-        try:
-            songs = data.json().get("result", {}).get("songs", [])
-        except Exception as e:
-            print("网易云音乐搜索失败", e, data.text)
-            songs = []
+        songs = data.json().get("result", {}).get("songs", [])
         for song in songs:
             artists = song.get("ar", [])
             album = song.get("al", {})
             if artists:
-                artist = ",".join([artist.get("name", "") for artist in artists])
+                artist = artists[0].get("name", "")
                 artist_id = artists[0].get("id", "")
             else:
                 artist = ""
                 artist_id = ""
-            year = song.get("publishTime", "")
+            year = song.get("publishTime", 0)
             if year:
                 year = timestamp_to_dt(year / 1000, "%Y")
             song["artist"] = artist
@@ -78,7 +50,7 @@ class NetEaseMusicClient:
             song["album"] = album.get("name", "")
             song["album_id"] = album.get("id", "")
             song["album_img"] = album.get("picUrl", {})
-            song["year"] = year or ""
+            song["year"] = year
         return songs
 
 
@@ -107,17 +79,4 @@ class MiGuMusicClient:
             song["album_id"] = song['albumId']
             song["album_img"] = song['cover']
             song["year"] = ""
-        return songs
-
-
-class QmusicClient:
-    def fetch_lyric(self, song_id):
-        a = QQMusicApi()
-        res = a.getQQMusicMediaLyric(song_id)
-        decoded_str = base64.b64decode(res.get("lyric", "")).decode("utf-8")
-        return decoded_str
-
-    def fetch_id3_by_title(self, title):
-        a = QQMusicApi()
-        songs = a.getQQMusicMatchSong(title)
         return songs

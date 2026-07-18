@@ -1,26 +1,22 @@
 import base64
 import copy
-import copy
+import json
 import os
-import time
+import random
 
+import music_tag
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views.decorators.gzip import gzip_page
-from rest_framework import mixins
 from rest_framework.decorators import action
 
-from applications.task.constants import ALLOW_TYPE
-from applications.task.filters import TaskFilters
-from applications.task.models import TaskRecord, Task
+from applications.music.models import Artist, Track, Album
 from applications.task.serialziers import FileListSerializer, Id3Serializer, UpdateId3Serializer, \
-    FetchId3ByTitleSerializer, FetchLlyricSerializer, BatchUpdateId3Serializer, TranslationLycSerializer, \
-    TidyFolderSerializer, TaskSerializer, UploadImageSerializer, SplitArtistSerializer, DuplicateCheckSerializer
-from applications.task.services.music_ids import MusicIDS
+    FetchId3ByTitleSerializer, FetchLlyricSerializer, BatchUpdateId3Serializer, MergeArtistSerializer
 from applications.task.services.music_resource import MusicResource
 from applications.task.services.update_ids import update_music_info
 from applications.task.services.split_utils import batch_split_artists, find_duplicate_songs
-from applications.task.tasks import full_scan_folder, scan, clear_music, batch_auto_tag_task, tidy_folder_task
-from applications.utils.translation import translation_lyc_text
+from applications.task.tasks import full_scan_folder, scan_music_id3, scan, clear_music
 from component.drf.viewsets import GenericViewSet
 from django_vue_cli.celery_app import app as celery_app
 
@@ -38,18 +34,10 @@ class TaskViewSets(GenericViewSet):
             return FetchId3ByTitleSerializer
         elif self.action == "fetch_lyric":
             return FetchLlyricSerializer
-        elif self.action in ["batch_update_id3", "batch_auto_update_id3"]:
+        elif self.action == "batch_update_id3":
             return BatchUpdateId3Serializer
-        elif self.action == "translation_lyc":
-            return TranslationLycSerializer
-        elif self.action == "tidy_folder":
-            return TidyFolderSerializer
-        elif self.action == "upload_image":
-            return UploadImageSerializer
-        elif self.action == "split_artist":
-            return SplitArtistSerializer
-        elif self.action == "check_duplicate":
-            return DuplicateCheckSerializer
+        elif self.action in ["merge_artist", "merge_album"]:
+            return MergeArtistSerializer
         return FileListSerializer
 
     @action(methods=['POST'], detail=False)
@@ -57,48 +45,31 @@ class TaskViewSets(GenericViewSet):
         """文件列表"""
         validate_data = self.is_validated_data(request.data)
         file_path = validate_data['file_path']
-        sorted_fields = validate_data['sorted_fields']
         file_path_list = file_path.split('/')
         try:
             data = os.scandir(file_path)
         except FileNotFoundError:
             return self.failure_response(msg="文件夹不存在")
         children_data = []
+        allow_type = ["flac", "mp3", "ape", "wav", "aiff", "wv", "tta", "mp4", "m4a", "ogg", "mpc",
+                      "opus", "wma", "dsf", "dff"]
         frc_map = {}
-        file_data = []
-        full_path_list = []
-        for entry in data:
-            each = entry.name.encode('utf-8', 'replace').decode()
-            file_data.append({
-                "name": each,
-                "path": entry.path.encode('utf-8', 'replace').decode(),
-                "is_dir": entry.is_dir(),
-                "update_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry.stat().st_mtime)),
-                "size": entry.stat().st_size
-            })
-            full_path_list.append(f"{file_path}/{each}")
+        for index, entry in enumerate(data, 1):
+            each = entry.name
             file_type = each.split(".")[-1]
             file_name = ".".join(each.split(".")[:-1])
-            if file_type in ["lrc", "txt"]:
-                frc_map[file_name] = each
-        task_map = dict(Task.objects.filter(parent_path=file_path).values_list("filename", "state"))
-        for index, entry in enumerate(file_data, 1):
-            each = entry.get("name")
-            file_type = each.split(".")[-1]
-            file_name = ".".join(each.split(".")[:-1])
-            if entry.get("is_dir", None):
+            if os.path.isdir(f"{file_path}/{each}"):
                 children_data.append({
                     "id": index,
                     "name": each,
                     "title": each,
                     "icon": "icon-folder",
-                    "state": "null",
-                    "children": [],
-                    "size": entry.get("size"),
-                    "update_time": entry.get("update_time")
+                    "children": []
                 })
                 continue
-            if file_type not in ALLOW_TYPE:
+            if file_type in ["lrc", "txt"]:
+                frc_map[file_name] = each
+            if file_type not in allow_type:
                 continue
             if file_name in frc_map:
                 icon = "icon-script-files"
@@ -108,17 +79,8 @@ class TaskViewSets(GenericViewSet):
                 "id": index,
                 "name": each,
                 "title": each,
-                "icon": icon,
-                "state": task_map.get(each, "null"),
-                "size": entry.get("size"),
-                "update_time": entry.get("update_time")
+                "icon": icon
             })
-        if "name" in sorted_fields:
-            children_data = sorted(children_data, key=lambda x: x.get("name").encode('gbk', "ignore"), reverse=False)
-        if "update_time" in sorted_fields:
-            children_data = sorted(children_data, key=lambda x: x.get("update_time"), reverse=True)
-        if "size" in sorted_fields:
-            children_data = sorted(children_data, key=lambda x: x.get("size"), reverse=True)
         res_data = [
             {
                 "name": file_path_list[-1],
@@ -144,10 +106,25 @@ class TaskViewSets(GenericViewSet):
         sub_path = file_path.split('/')[-1]
         if sub_path == file_name:
             return self.success_response()
-        try:
-            res_data = MusicIDS(f"{file_path}/{file_name}").to_dict()
-        except Exception as e:
-            return self.failure_response(msg=str(e))
+        file_title = file_name.split('.')[0]
+        f = music_tag.load_file(f"{file_path}/{file_name}")
+        artwork = f["artwork"].values
+        bs64_img = ""
+        if artwork:
+            zip_img = artwork[0].raw_thumbnail([128, 128])
+
+            bs64_img = base64.b64encode(zip_img).decode()
+        res_data = {
+            "title": f["title"].value or file_title,
+            "artist": f["artist"].value,
+            "album": f["album"].value,
+            "genre": f["genre"].value,
+            "year": f["year"].value,
+            "lyrics": f["lyrics"].value,
+            "comment": f["comment"].value,
+            "artwork": "data:image/jpeg;base64," + bs64_img,
+            "filename": file_name
+        }
         return self.success_response(data=res_data)
 
     @action(methods=['POST'], detail=False)
@@ -155,7 +132,7 @@ class TaskViewSets(GenericViewSet):
         """更新音乐id3信息"""
         validate_data = self.is_validated_data(request.data)
         music_id3_info = validate_data['music_id3_info']
-        update_music_info(music_id3_info, False)
+        update_music_info(music_id3_info)
         return self.success_response()
 
     @action(methods=['POST'], detail=False)
@@ -170,7 +147,7 @@ class TaskViewSets(GenericViewSet):
             if data.get('icon') == 'icon-folder':
                 file_full_path = f"{full_path}/{data.get('name')}"
                 data = os.scandir(file_full_path)
-                allow_type = ["flac", "mp3", "ape", "wav", "aiff", "wv", "tta", "m4a", "ogg", "mpc",
+                allow_type = ["flac", "mp3", "ape", "wav", "aiff", "wv", "tta", "mp4", "m4a", "ogg", "mpc",
                               "opus", "wma", "dsf", "dff"]
                 for index, entry in enumerate(data, 1):
                     each = entry.name
@@ -185,32 +162,10 @@ class TaskViewSets(GenericViewSet):
             else:
                 music_info.update({
                     "file_full_path": f"{full_path}/{data.get('name')}",
+                    "filename": data.get('name')
                 })
                 music_id3_info.append(copy.deepcopy(music_info))
-        update_music_info(music_id3_info, False)
-        return self.success_response()
-
-    @action(methods=['POST'], detail=False)
-    def batch_auto_update_id3(self, request, *args, **kwargs):
-        validate_data = self.is_validated_data(request.data)
-        full_path = validate_data['file_full_path']
-        select_data = validate_data['select_data']
-        music_info = validate_data['music_info']
-        select_mode = music_info["select_mode"]
-        source_list = music_info.get("source_list", [])
-        timestamp = str(int(time.time() * 1000))
-        bulk_set = []
-        for each in select_data:
-            name = each.get("name")
-            song_name = ".".join(name.split(".")[:-1])
-            bulk_set.append(TaskRecord(**{
-                "song_name": song_name,
-                "full_path": f"{full_path}/{name}",
-                "icon": each.get("icon"),
-                "batch": timestamp
-            }))
-        TaskRecord.objects.bulk_create(bulk_set, batch_size=500)
-        batch_auto_tag_task(timestamp, source_list, select_mode)
+        update_music_info(music_id3_info)
         return self.success_response()
 
     @action(methods=['POST'], detail=False)
@@ -219,7 +174,7 @@ class TaskViewSets(GenericViewSet):
         resource = validate_data["resource"]
         song_id = validate_data["song_id"]
         try:
-            lyric = MusicResource(resource).fetch_lyric(song_id) or ""
+            lyric = MusicResource(resource).fetch_lyric(song_id)
         except Exception as e:
             lyric = f"未找到歌词 {e}"
         return self.success_response(data=lyric)
@@ -228,81 +183,10 @@ class TaskViewSets(GenericViewSet):
     def fetch_id3_by_title(self, request, *args, **kwargs):
         validate_data = self.is_validated_data(request.data)
         resource = validate_data["resource"]
-        full_path = validate_data.get("full_path", "")
-        title = validate_data["title"]
 
-        if resource == "acoustid":
-            title = full_path
-        elif resource == "smart_tag":
-            title = {"title": title, "full_path": full_path}
+        title = validate_data["title"]
         songs = MusicResource(resource).fetch_id3_by_title(title)
         return self.success_response(data=songs)
-
-    @action(methods=['POST'], detail=False)
-    def translation_lyc(self, request, *args, **kwargs):
-        validate_data = self.is_validated_data(request.data)
-        lyc = validate_data["lyc"]
-        clean_lyc_list = []
-        raw_lyc_list = []
-        for line in lyc.split("\n"):
-            if not line:
-                continue
-            clean_line = line.split("]")[-1]
-            clean_line = clean_line.strip()
-            if not clean_line:
-                continue
-            raw_lyc_list.append(line)
-            clean_lyc_list.append(clean_line)
-        clean_lyc_str = "\n".join(clean_lyc_list)
-        results = translation_lyc_text(clean_lyc_str)
-        new_lyc = []
-        results_list = results.split("\n")
-        for index, result in enumerate(results_list):
-            if not result:
-                new_lyc.append(raw_lyc_list[index])
-            else:
-                try:
-                    src = clean_lyc_list[index]
-                    raw_src = raw_lyc_list[index]
-                except Exception as e:
-                    continue
-                if src.replace(" ", "") == result.replace(" ", ""):
-                    new_lyc.append(raw_src)
-                else:
-                    new_lyc.append(f"{raw_src}\n「{result}」\n")
-        return self.success_response(data="\n".join(new_lyc))
-
-    @action(methods=['POST'], detail=False)
-    def tidy_folder(self, request, *args, **kwargs):
-        validate_data = self.is_validated_data(request.data)
-        root_path = validate_data["root_path"]
-        first_dir = validate_data["first_dir"]
-        full_path = validate_data["file_full_path"]
-        select_data = validate_data["select_data"]
-        second_dir = validate_data.get("second_dir", "")
-        music_id3_info = []
-        for data in select_data:
-            if data.get('icon') == 'icon-folder':
-                file_full_path = f"{full_path}/{data.get('name')}"
-                data = os.scandir(file_full_path)
-                for index, entry in enumerate(data, 1):
-                    each = entry.name
-                    file_type = each.split(".")[-1]
-                    if file_type not in ALLOW_TYPE:
-                        continue
-                    music_id3_info.append(f"{file_full_path}/{each}")
-            else:
-                music_id3_info.append(f"{full_path}/{data.get('name')}")
-        tidy_folder_task(music_id3_info, {"root_path": root_path, "first_dir": first_dir, "second_dir": second_dir})
-        return self.success_response()
-
-    @action(methods=['POST'], detail=False)
-    def upload_image(self, request, *args, **kwargs):
-        upload_file = request.FILES.get('upload_file')
-
-        bs64_img = base64.b64encode(upload_file.read()).decode()
-        # bs64_img_str = "data:image/jpeg;base64," + bs64_img
-        return self.success_response(data=bs64_img)
 
     @action(methods=["get"], detail=False)
     def clear_celery(self, request, *args, **kwargs):
@@ -341,6 +225,35 @@ class TaskViewSets(GenericViewSet):
         return self.success_response()
 
     @action(methods=['POST'], detail=False)
+    def merge_artist(self, request, *args, **kwargs):
+        validate_data = self.is_validated_data(request.data)
+        full_text = validate_data["full_text"]
+        artist_list = Artist.objects.filter(full_text=full_text).all()
+        first_artist = artist_list[0]
+        first_artist.name = full_text
+        first_artist.save()
+        with transaction.atomic():
+            for artist in artist_list[1:]:
+                Track.objects.filter(artist=artist).update(artist=first_artist)
+                Album.objects.filter(artist=artist).update(artist=first_artist)
+                Artist.objects.filter(id=artist.id).delete()
+        return self.success_response()
+
+    @action(methods=['POST'], detail=False)
+    def merge_album(self, request, *args, **kwargs):
+        validate_data = self.is_validated_data(request.data)
+        full_text = validate_data["full_text"]
+        album_list = Album.objects.filter(full_text=full_text).all()
+        first_album = album_list[0]
+        first_album.name = full_text
+        first_album.save()
+        with transaction.atomic():
+            for album in album_list[1:]:
+                Track.objects.filter(album=album).update(album=first_album)
+                Album.objects.filter(id=album.id).delete()
+        return self.success_response()
+
+    @action(methods=['POST'], detail=False)
     def split_artist(self, request, *args, **kwargs):
         """批量拆分合作艺人"""
         validate_data = self.is_validated_data(request.data)
@@ -348,6 +261,8 @@ class TaskViewSets(GenericViewSet):
         select_data = validate_data['select_data']
         separator = validate_data.get('separator', '/')
 
+        allow_type = ["flac", "mp3", "ape", "wav", "aiff", "wv", "tta", "mp4", "m4a", "ogg", "mpc",
+                      "opus", "wma", "dsf", "dff"]
         file_paths = []
         for data in select_data:
             if data.get('icon') == 'icon-folder':
@@ -357,7 +272,7 @@ class TaskViewSets(GenericViewSet):
                     for entry in entries:
                         each = entry.name
                         file_type = each.split(".")[-1]
-                        if file_type in ALLOW_TYPE:
+                        if file_type in allow_type:
                             file_paths.append(f"{folder_path}/{each}")
                 except Exception:
                     pass
@@ -382,6 +297,8 @@ class TaskViewSets(GenericViewSet):
         full_path = validate_data['file_full_path']
         select_data = validate_data['select_data']
 
+        allow_type = ["flac", "mp3", "ape", "wav", "aiff", "wv", "tta", "mp4", "m4a", "ogg", "mpc",
+                      "opus", "wma", "dsf", "dff"]
         file_paths = []
         for data in select_data:
             if data.get('icon') == 'icon-folder':
@@ -391,14 +308,14 @@ class TaskViewSets(GenericViewSet):
                     for entry in entries:
                         each = entry.name
                         file_type = each.split(".")[-1]
-                        if file_type in ALLOW_TYPE:
+                        if file_type in allow_type:
                             file_paths.append(f"{folder_path}/{each}")
                 except Exception:
                     pass
             else:
                 name = data.get('name', '')
                 file_type = name.split(".")[-1]
-                if file_type in ALLOW_TYPE:
+                if file_type in allow_type:
                     file_paths.append(f"{full_path}/{name}")
 
         duplicates = find_duplicate_songs(file_paths)
@@ -415,9 +332,23 @@ class TaskViewSets(GenericViewSet):
             'wasted_size': wasted_size,
         })
 
+    @action(methods=['GET'], detail=False)
+    def import_music(self, request, *args, **kwargs):
+        with open("/Users/macbookair/Downloads/艺术家.json","r") as f:
+            a = json.load(f)
+        for each in a["objects"]:
+            Artist.objects.create(**{
+                "name": each["name"],
+            })
+        return self.success_response()
 
-class TaskModelViewSets(mixins.ListModelMixin,
-                        GenericViewSet):
-    queryset = Task.objects.order_by("-id")
-    serializer_class = TaskSerializer
-    filterset_class = TaskFilters
+    @action(methods=['GET'], detail=False)
+    def import_music2(self, request, *args, **kwargs):
+        with open("/Users/macbookair/Downloads/专辑.json", "r") as f:
+            a = json.load(f)
+        for each in a["objects"]:
+            Album.objects.create(**{
+                "name": each["专辑名称"],
+                "artist_id": random.randint(11, 485)
+            })
+        return self.success_response()

@@ -88,11 +88,8 @@ class GenericViewSet(ApiGenericMixin, viewsets.GenericViewSet):
         return Response({"result": False, "code": "400", "data": [], "message": msg})
 
     def success_response(self, msg="success", data=None):
-        if data is None:
-            data = []
+        data = data or []
         return Response({"result": True, "code": "200", "data": data, "message": msg})
-
-
 class CreateModelAndLogMixin(mixins.CreateModelMixin):
     """
     Create a model instance and log.

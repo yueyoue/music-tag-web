@@ -2,44 +2,46 @@ import uuid
 from datetime import datetime
 
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Count
 from django_mysql.models import ListTextField
 
 from applications.music import validators
 from applications.music.utils import get_file_path
+from rest_framework import exceptions
 
 
 class Album(models.Model):
     name = models.CharField("专辑名称", max_length=255, default='', null=False)
     artist = models.ForeignKey('Artist', on_delete=models.SET_NULL, null=True, related_name='albums',
                                db_constraint=False)
-    all_artist_ids = ListTextField(base_field=models.IntegerField(), default=list)
+    all_artist_ids = ListTextField(base_field=models.IntegerField(), default=list, null=True, blank=True)
 
     max_year = models.IntegerField(default=0, null=False)
     song_count = models.IntegerField("歌曲统计", default=-1, null=False)
     plays_count = models.IntegerField("播放次数", default=0, null=False)
     duration = models.FloatField("歌曲时长s", default=0, null=False)
     genre = models.ForeignKey('Genre', on_delete=models.SET_NULL, null=True, related_name='albums', db_constraint=False)
-    created_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(null=True, default=datetime.now)
     updated_at = models.DateTimeField(null=True, auto_now=True)
-    accessed_date = models.DateTimeField("访问时间", null=True)
+    accessed_date = models.DateTimeField("访问时间", null=True, blank=True)
 
     full_text = models.CharField(max_length=255, default='', null=True, blank=True)
     size = models.IntegerField("文件大小", default=0, null=False)
-    comment = models.CharField(max_length=255, null=True)
-    paths = models.CharField(max_length=255, null=True)
-    description = models.CharField(max_length=255, default='', null=True)
+    comment = models.CharField(max_length=255, null=True, blank=True)
+    paths = models.CharField(max_length=255, null=True, blank=True)
+    description = models.CharField(max_length=255, default='', null=True, blank=True)
     attachment_cover = models.ForeignKey('Attachment', on_delete=models.SET_NULL, null=True, related_name='album_cover',
                                          db_constraint=False)
 
     # musicbrainz fields
-    mbz_album_id = models.CharField(max_length=255, null=True)
-    mbz_album_artist_id = models.CharField(max_length=255, null=True)
-    mbz_album_type = models.CharField(max_length=255, null=True)
-    mbz_album_comment = models.CharField(max_length=255, null=True)
+    mbz_album_id = models.CharField(max_length=255, null=True, blank=True)
+    mbz_album_artist_id = models.CharField(max_length=255, null=True, blank=True)
+    mbz_album_type = models.CharField(max_length=255, null=True, blank=True)
+    mbz_album_comment = models.CharField(max_length=255, null=True, blank=True)
 
-    external_url = models.CharField(max_length=255, default='', null=True)
-    external_info_updated_at = models.DateTimeField(null=True)
+    external_url = models.CharField(max_length=255, default='', null=True, blank=True)
+    external_info_updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "专辑"
@@ -90,6 +92,11 @@ class Track(models.Model):
         return self.name
 
 
+class ArtistManager(models.Manager):
+    def with_albums_count(self):
+        return self.annotate(_albums_count=Count('albums'))
+
+
 class Artist(models.Model):
     name = models.CharField(max_length=255, default='', blank=False)
     album_count = models.IntegerField(default=0)
@@ -105,6 +112,8 @@ class Artist(models.Model):
     external_url = models.CharField(max_length=255, default='', null=True, blank=True)
     external_info_updated_at = models.DateTimeField(null=True, blank=True)
 
+    objects = ArtistManager()
+
     class Meta:
         verbose_name = "艺术家"
         verbose_name_plural = "艺术家"
@@ -119,6 +128,9 @@ class Genre(models.Model):
     class Meta:
         verbose_name = "风格"
         verbose_name_plural = "风格"
+
+    def __str__(self):
+        return self.name
 
 
 class Attachment(models.Model):
@@ -176,6 +188,75 @@ class Playlist(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        verbose_name = "播放列表"
+        verbose_name_plural = "播放列表"
+
+    @transaction.atomic
+    def remove(self, index):
+        existing = self.playlist_tracks.select_for_update()
+        self.save(update_fields=["modification_date"])
+        to_update = existing.filter(index__gt=index)
+        return to_update.update(index=models.F("index") - 1)
+
+    @transaction.atomic
+    def insert_many(self, tracks, allow_duplicates=True):
+        existing = self.playlist_tracks.select_for_update()
+        now = datetime.now()
+        total = existing.filter(index__isnull=False).count()
+
+        if not allow_duplicates:
+            self._check_duplicate_add(existing, tracks)
+
+        self.save(update_fields=["modification_date"])
+        start = total
+        plts = [
+            PlaylistTrack(
+                creation_date=now, playlist=self, track=track, index=start + i
+            )
+            for i, track in enumerate(tracks)
+        ]
+        return PlaylistTrack.objects.bulk_create(plts)
+
+    def _check_duplicate_add(self, existing_playlist_tracks, tracks_to_add):
+        track_ids = [t.pk for t in tracks_to_add]
+
+        duplicates = existing_playlist_tracks.filter(
+            track__pk__in=track_ids
+        ).values_list("track__pk", flat=True)
+        if duplicates:
+            duplicate_tracks = [t for t in tracks_to_add if t.pk in duplicates]
+            raise exceptions.ValidationError(
+                {
+                    "non_field_errors": [
+                        {
+                            "tracks": duplicate_tracks,
+                            "playlist_name": self.name,
+                            "code": "tracks_already_exist_in_playlist",
+                        }
+                    ]
+                }
+            )
+
+
+class PlaylistTrack(models.Model):
+    track = models.ForeignKey("Track", related_name="playlist_tracks", on_delete=models.CASCADE)
+    index = models.PositiveIntegerField(null=True, blank=True)
+    playlist = models.ForeignKey(Playlist, related_name="playlist_tracks", on_delete=models.CASCADE)
+    creation_date = models.DateTimeField(default=datetime.now)
+
+    class Meta:
+        ordering = ("-playlist", "index")
+
+    def delete(self, *args, **kwargs):
+        playlist = self.playlist
+        index = self.index
+        update_indexes = kwargs.pop("update_indexes", False)
+        r = super().delete(*args, **kwargs)
+        if index is not None and update_indexes:
+            playlist.remove(index)
+        return r
+
 
 class TrackFavorite(models.Model):
     creation_date = models.DateTimeField(default=datetime.now)
@@ -183,28 +264,67 @@ class TrackFavorite(models.Model):
         User, related_name="track_favorites", on_delete=models.CASCADE
     )
     track = models.ForeignKey(
-        Track, related_name="track_favorites", on_delete=models.CASCADE
+        Track, related_name="track_favorites", on_delete=models.CASCADE, null=True, blank=True
     )
+    album = models.ForeignKey(Album, related_name="track_favorites", on_delete=models.CASCADE, null=True, blank=True)
+    artist = models.ForeignKey(Artist, related_name="track_favorites", on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
-        unique_together = ("track", "user")
         ordering = ("-creation_date",)
+        verbose_name = "喜爱列表"
+        verbose_name_plural = "喜爱列表"
 
     @classmethod
-    def add(cls, track, user):
+    def add_track(cls, track, user):
         favorite, created = cls.objects.get_or_create(user=user, track=track)
         return favorite
 
+    @classmethod
+    def add_album(cls, album, user):
+        favorite, created = cls.objects.get_or_create(user=user, album=album)
+        return favorite
+
+    @classmethod
+    def add_artist(cls, artist, user):
+        favorite, created = cls.objects.get_or_create(user=user, artist=artist)
+        return favorite
+
+
+class FolderManager(models.Manager):
+    def last_scan_time(self):
+        last_folder = self.order_by("-last_scan_time").first()
+        if last_folder:
+            last_scan_time = last_folder.last_scan_time
+        else:
+            last_scan_time = datetime(1970, 1, 1)
+        return last_scan_time
+
 
 class Folder(models.Model):
-    name = models.CharField(max_length=256)
+    FILE_TYPE_CHOICES = (
+        ('folder', '文件夹'),
+        ('music', '音乐'),
+        ('image', '图片'),
+    )
+    STATE_CHOICES = (
+        ('none', '未扫描'),
+        ('scanning', '扫描中'),
+        ('scanned', '扫描完成'),
+        ('updated', '已更新')
+    )
+    name = models.CharField("文件名称", max_length=256)
     path = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     last_scan_time = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(default=datetime.now)
     # 文件格式，例如：folder, music, image
-    file_type = models.CharField(max_length=32, default='folder')
+    file_type = models.CharField("文件格式", max_length=32, default='folder', choices=FILE_TYPE_CHOICES)
     uid = models.UUIDField(default=uuid.uuid4, editable=False)
     parent_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
     # none, scanning, scanned, updated
-    state = models.CharField(max_length=32, default='none')
+    state = models.CharField("状态", max_length=32, default='none', choices=STATE_CHOICES)
+    objects = FolderManager()
+
+    class Meta:
+        verbose_name = "文件目录"
+        verbose_name_plural = "文件目录"

@@ -1,10 +1,18 @@
 import collections
+import time
 
 from django.db.models import Count, functions, Sum
 from rest_framework import serializers
 
-from applications.music.models import Track
+from applications.music.models import Track, Artist, Album
 from applications.subsonic.utils import get_type_from_ext
+
+
+class PassSerializers(serializers.Serializer):
+    u = serializers.CharField(required=True)
+    p = serializers.CharField(required=False)
+    s = serializers.CharField(required=False)
+    t = serializers.CharField(required=False)
 
 
 def to_subsonic_date(date):
@@ -52,6 +60,26 @@ def get_artist_data(artist_values):
     }
 
 
+def get_folder_data(artist_values):
+    return {
+        "id": artist_values["uid"],
+        "name": artist_values["name"],
+        "albumCount": 0,
+        "coverArt": "",
+    }
+
+
+def get_folder_child(folder):
+    return {
+        "id": folder.uid,
+        "parent": folder.parent_id,
+        "title": folder.name,
+        "artist": "",
+        "isDir": True if folder.file_type == "folder" else False,
+        "coverArt": "",
+    }
+
+
 class GetArtistsSerializer(serializers.Serializer):
     def to_representation(self, queryset):
         payload = {"ignoredArticles": "", "index": []}
@@ -73,9 +101,30 @@ class GetArtistsSerializer(serializers.Serializer):
         return payload
 
 
+class GetFolderSerializer(serializers.Serializer):
+    def to_representation(self, queryset):
+        payload = {"ignoredArticles": "", "index": []}
+        queryset = queryset.order_by(functions.Lower("name"))
+        values = queryset.values("id", "name", "uid")
+
+        first_letter_mapping = collections.defaultdict(list)
+        for artist in values:
+            if artist["name"]:
+                first_letter_mapping[artist["name"][0].upper()].append(artist)
+
+        for letter, artists in sorted(first_letter_mapping.items()):
+            letter_data = {
+                "name": letter,
+                "artist": [get_folder_data(v) for v in artists],
+            }
+            payload["index"].append(letter_data)
+        return payload
+
+
 class GetArtistSerializer(serializers.Serializer):
     def to_representation(self, artist):
-        albums = artist.albums.all()
+
+        albums = Album.objects.filter(artist=artist).prefetch_related("tracks")
         payload = {
             "id": artist.pk,
             "name": artist.name,
@@ -92,7 +141,7 @@ class GetArtistSerializer(serializers.Serializer):
                 "artist": artist.name,
                 "created": to_subsonic_date(album.created_at),
                 "songCount": album.tracks.count(),
-                "duration": album.tracks.aggregate(duration_count=Sum("duration")).get("duration_count", 0)
+                "duration": sum([t.duration or 0 for t in album.tracks.all()])
             }
             if album.attachment_cover_id:
                 album_data["coverArt"] = f"al-{album.id}"
@@ -142,15 +191,15 @@ def get_album2_data(album):
     """
     subsonic expects this kind of data:
     """
-    # todo 优化 外建关联prefetch
     payload = {
         "id": album.id,
         "artistId": album.artist_id,
         "name": album.name,
-        "artist": album.artist.name,
+        "artist": album.artist.name if album.artist else "",
         "created": to_subsonic_date(album.created_at),
-        "duration": album.tracks.aggregate(duration_count=Sum("duration")).get("duration_count", 0),
-        "playCount": 1,
+        "duration": album.duration,
+        "playCount": album.plays_count,
+        "songCount": album.song_count,
     }
     if album.attachment_cover_id:
         payload["coverArt"] = f"al-{album.id}"
@@ -158,7 +207,6 @@ def get_album2_data(album):
         payload["genre"] = album.genre.name
     if album.max_year:
         payload["year"] = album.max_year
-    payload["songCount"] = album.tracks.count()
     return payload
 
 
@@ -174,7 +222,7 @@ class GetAlbumSerializer(serializers.Serializer):
     def to_representation(self, album):
         payload = get_album2_data(album)
 
-        tracks = album.tracks.all()
+        tracks = album.tracks.select_related("album__artist")
         payload["song"] = get_song_list_data(tracks)
         return payload
 
@@ -184,22 +232,47 @@ class GetSongSerializer(serializers.Serializer):
         return get_track_data(track)
 
 
-def get_starred_tracks_data(favorites):
-    by_track_id = {f.track_id: f for f in favorites}
-    tracks = (
-        Track.objects.filter(pk__in=by_track_id.keys())
-            .select_related("album__artist")
-    )
-    tracks = tracks.order_by("-created_at")
-    data = []
-    for t in tracks:
-        td = get_track_data(t)
-        td["starred"] = to_subsonic_date(by_track_id[t.pk].created_at)
-        data.append(td)
-    return data
+def get_starred_data(favorites):
+    by_track_id = {}
+    by_album_id = {}
+    by_artist_id = {}
+    song_data = []
+    artist_data = []
+    album_data = []
+    for f in favorites:
+        if f.track_id:
+            by_track_id[f.track_id] = f
+        elif f.album_id:
+            by_album_id[f.album_id] = f
+        elif f.artist_id:
+            by_artist_id[f.artist_id] = f
+    if by_track_id:
+        tracks = (
+            Track.objects.filter(pk__in=by_track_id.keys())
+                .select_related("album__artist")
+        )
+        for t in tracks:
+            td = get_track_data(t)
+            td["starred"] = to_subsonic_date(by_track_id[t.pk].creation_date)
+            song_data.append(td)
+    if by_artist_id:
+        artists = Artist.objects.filter(pk__in=by_artist_id.keys()).annotate(_albums_count=Count("albums")) \
+            .values("id", "name", "_albums_count")
+        for a in artists:
+            ad = get_artist_data(a)
+            ad["starred"] = to_subsonic_date(by_artist_id[a["id"]].creation_date)
+            artist_data.append(ad)
+    if by_album_id:
+        albums = Album.objects.filter(pk__in=by_album_id.keys()).select_related("artist").prefetch_related("tracks")
+        for a in albums:
+            ad = get_album2_data(a)
+            ad["starred"] = to_subsonic_date(by_album_id[a.pk].creation_date)
+            album_data.append(ad)
+    return {"song": song_data, "album": album_data, "artist": artist_data}
 
 
 def get_album_list2_data(albums):
+    albums = albums.select_related("artist").select_related("genre")
     return [get_album2_data(a) for a in albums]
 
 
@@ -208,7 +281,7 @@ def get_playlist_data(playlist):
         "id": playlist.pk,
         "name": playlist.name,
         "owner": playlist.user.username,
-        "public": "false",
+        "public": False,
         "songCount": 0,
         "duration": 0,
         "created": to_subsonic_date(playlist.creation_date),
@@ -219,16 +292,11 @@ def get_playlist_detail_data(playlist):
     data = get_playlist_data(playlist)
     qs = (
         playlist.playlist_tracks.select_related("track__album__artist")
-            .prefetch_related("track__uploads")
             .order_by("index")
     )
     data["entry"] = []
     for plt in qs:
-        try:
-            uploads = [upload for upload in plt.track.uploads.all()][0]
-        except IndexError:
-            continue
-        td = get_track_data(plt.track.album, plt.track, uploads)
+        td = get_track_data(plt.track)
         data["entry"].append(td)
     return data
 
@@ -261,9 +329,9 @@ def get_user_detail_data(user):
     }
 
 
-def get_genre_data(tag):
+def get_genre_data(tag, _tracks_count_map):
     return {
-        "songCount": getattr(tag, "_tracks_count", 0),
+        "songCount": _tracks_count_map.get(tag.pk, 0),
         "albumCount": getattr(tag, "_albums_count", 0),
         "value": tag.name,
     }

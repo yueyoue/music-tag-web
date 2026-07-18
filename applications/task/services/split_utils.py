@@ -4,8 +4,7 @@
 import os
 from collections import defaultdict
 
-from component import music_tag
-from applications.task.constants import ALLOW_TYPE
+import music_tag
 
 
 def split_artists(file_path, separator='/'):

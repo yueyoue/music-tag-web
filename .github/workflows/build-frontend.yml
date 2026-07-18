@@ -1,0 +1,38 @@
+name: Build Frontend
+
+on:
+  push:
+    paths:
+      - 'web/src/**'
+      - 'web/build/**'
+      - 'web/package.json'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:14
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm install --registry https://registry.npmmirror.com
+
+      - name: Build frontend
+        working-directory: web
+        run: NODE_OPTIONS=--openssl-legacy-provider npx webpack --config build/webpack.prod.conf.js
+
+      - name: Copy dist to static
+        run: |
+          rm -rf static/dist
+          cp -r web/dist static/dist
+
+      - name: Commit built files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/dist
+          git diff --cached --quiet || git commit -m "build: update frontend dist [skip ci]"
+          git push

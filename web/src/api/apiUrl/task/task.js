@@ -22,23 +22,17 @@ export default {
     batchUpdateId3: function(params) {
         return POST(reUrl + '/api/batch_update_id3/', params)
     },
-    batchAutoUpdateId3: function(params) {
-        return POST(reUrl + '/api/batch_auto_update_id3/', params)
-    },
-    tidyFolder: function(params) {
-        return POST(reUrl + '/api/tidy_folder/', params)
-    },
     fetchId3Title: function(params) {
         return POST(reUrl + '/api/fetch_id3_by_title/', params)
     },
     fetchLyric: function(params) {
         return POST(reUrl + '/api/fetch_lyric/', params)
     },
-    translationLyc: function(params) {
-        return POST(reUrl + '/api/translation_lyc/', params)
+    mergeArtist: function(params) {
+        return POST(reUrl + '/api/merge_artist/', params)
     },
-    getRecord: function(params) {
-        return GET(reUrl + '/api/record/', params)
+    mergeAlbum: function(params) {
+        return POST(reUrl + '/api/merge_album/', params)
     },
     splitArtist: function(params) {
         return POST(reUrl + '/api/split_artist/', params)

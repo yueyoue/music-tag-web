@@ -1,13 +1,18 @@
 <template>
-    <bk-navigation :default-open="false" navigation-type="top-bottom" :header-title="headerTitle" :side-title="title"
+    <bk-navigation :default-open="false" navigation-type="left-right" :header-title="headerTitle" :side-title="title"
         @toggle="handleToggle" :need-menu="false" class="bk-wrapper">
         <!--      头部菜单      -->
         <template slot="header">
             <top-header></top-header>
         </template>
         <template slot="side-icon" class="monitor-logo">
-            <img class="monitor-logo-icon" src="/static/dist/img/favicon_64.ico">
+            <img class="monitor-logo-icon" :src="imgPath">
         </template>
+        <!--      左侧菜单      -->
+        <!--        <template slot="menu">-->
+        <!--            <leftMenu ref="leftMenu"></leftMenu>-->
+        <!--        </template>-->
+        <!--      内容区域      -->
         <container>
         </container>
     </bk-navigation>
@@ -26,7 +31,7 @@
         },
         data() {
             return {
-                title: '音乐标签Web版',
+                title: 'django-vue',
                 headerTitle: '',
                 imgSrc: '',
             }
@@ -71,13 +76,9 @@
             max-width: calc(100%) !important;
 
             .container-content {
-                padding: 0;
+                padding: 0px;
             }
         }
     }
-}
-.bk-navigation-header {
-    background-color: #ffffff !important;
-    border-bottom: 1px solid #dcdee5;
 }
 </style>

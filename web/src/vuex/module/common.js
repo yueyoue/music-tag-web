@@ -1,9 +1,7 @@
 const common = {
     state: {
         defaultTableHeight: 800,
-        userRole: '',
-        fullPath: '',
-        hasMsg: false
+        userRole: ''
     },
     mutations: {
         setDefaultTableHeight: (state, val) => {
@@ -11,12 +9,6 @@ const common = {
         },
         setUserRole: (state, val) => {
             state.userRole = val
-        },
-        setFullPath: (state, val) => {
-            state.fullPath = val
-        },
-        setHasMsg: (state, val) => {
-            state.hasMsg = val
         }
     }
 }

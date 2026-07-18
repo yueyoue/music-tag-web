@@ -40,7 +40,8 @@
     "vue-json-editor": "^1.3.2",
     "vue-router": "^3.0.1",
     "vuex": "^2.3.1",
-    "webpack-jquery-ui": "^2.0.1"
+    "webpack-jquery-ui": "^2.0.1",
+    "webpack-sources": "^3.5.1"
   },
   "devDependencies": {
     "autoprefixer": "^7.1.2",
