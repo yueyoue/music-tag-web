@@ -39,5 +39,11 @@ export default {
     },
     getRecord: function(params) {
         return GET(reUrl + '/api/record/', params)
+    },
+    splitArtist: function(params) {
+        return POST(reUrl + '/api/split_artist/', params)
+    },
+    checkDuplicate: function(params) {
+        return POST(reUrl + '/api/check_duplicate/', params)
     }
 }

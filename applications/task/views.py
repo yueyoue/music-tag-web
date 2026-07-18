@@ -14,10 +14,11 @@ from applications.task.filters import TaskFilters
 from applications.task.models import TaskRecord, Task
 from applications.task.serialziers import FileListSerializer, Id3Serializer, UpdateId3Serializer, \
     FetchId3ByTitleSerializer, FetchLlyricSerializer, BatchUpdateId3Serializer, TranslationLycSerializer, \
-    TidyFolderSerializer, TaskSerializer, UploadImageSerializer
+    TidyFolderSerializer, TaskSerializer, UploadImageSerializer, SplitArtistSerializer, DuplicateCheckSerializer
 from applications.task.services.music_ids import MusicIDS
 from applications.task.services.music_resource import MusicResource
 from applications.task.services.update_ids import update_music_info
+from applications.task.services.split_utils import batch_split_artists, find_duplicate_songs
 from applications.task.tasks import full_scan_folder, scan, clear_music, batch_auto_tag_task, tidy_folder_task
 from applications.utils.translation import translation_lyc_text
 from component.drf.viewsets import GenericViewSet
@@ -45,6 +46,10 @@ class TaskViewSets(GenericViewSet):
             return TidyFolderSerializer
         elif self.action == "upload_image":
             return UploadImageSerializer
+        elif self.action == "split_artist":
+            return SplitArtistSerializer
+        elif self.action == "check_duplicate":
+            return DuplicateCheckSerializer
         return FileListSerializer
 
     @action(methods=['POST'], detail=False)
@@ -334,6 +339,81 @@ class TaskViewSets(GenericViewSet):
     def full_scan_folder(self, request, *args, **kwargs):
         full_scan_folder.delay()
         return self.success_response()
+
+    @action(methods=['POST'], detail=False)
+    def split_artist(self, request, *args, **kwargs):
+        """批量拆分合作艺人"""
+        validate_data = self.is_validated_data(request.data)
+        full_path = validate_data['file_full_path']
+        select_data = validate_data['select_data']
+        separator = validate_data.get('separator', '/')
+
+        file_paths = []
+        for data in select_data:
+            if data.get('icon') == 'icon-folder':
+                folder_path = f"{full_path}/{data.get('name')}"
+                try:
+                    entries = os.scandir(folder_path)
+                    for entry in entries:
+                        each = entry.name
+                        file_type = each.split(".")[-1]
+                        if file_type in ALLOW_TYPE:
+                            file_paths.append(f"{folder_path}/{each}")
+                except Exception:
+                    pass
+            else:
+                file_paths.append(f"{full_path}/{data.get('name')}")
+
+        results = batch_split_artists(file_paths, separator)
+        success_count = sum(1 for r in results if r['success'])
+        fail_count = len(results) - success_count
+
+        return self.success_response(data={
+            'results': results,
+            'success_count': success_count,
+            'fail_count': fail_count,
+            'total': len(results),
+        })
+
+    @action(methods=['POST'], detail=False)
+    def check_duplicate(self, request, *args, **kwargs):
+        """检测重复文件"""
+        validate_data = self.is_validated_data(request.data)
+        full_path = validate_data['file_full_path']
+        select_data = validate_data['select_data']
+
+        file_paths = []
+        for data in select_data:
+            if data.get('icon') == 'icon-folder':
+                folder_path = f"{full_path}/{data.get('name')}"
+                try:
+                    entries = os.scandir(folder_path)
+                    for entry in entries:
+                        each = entry.name
+                        file_type = each.split(".")[-1]
+                        if file_type in ALLOW_TYPE:
+                            file_paths.append(f"{folder_path}/{each}")
+                except Exception:
+                    pass
+            else:
+                name = data.get('name', '')
+                file_type = name.split(".")[-1]
+                if file_type in ALLOW_TYPE:
+                    file_paths.append(f"{full_path}/{name}")
+
+        duplicates = find_duplicate_songs(file_paths)
+        total_dup_files = sum(d['count'] for d in duplicates)
+        wasted_size = sum(
+            sum(f['size'] for f in d['files'][1:])
+            for d in duplicates
+        )
+
+        return self.success_response(data={
+            'duplicates': duplicates,
+            'total_groups': len(duplicates),
+            'total_dup_files': total_dup_files,
+            'wasted_size': wasted_size,
+        })
 
 
 class TaskModelViewSets(mixins.ListModelMixin,

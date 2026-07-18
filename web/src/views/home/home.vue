@@ -271,6 +271,18 @@
                             整理文件夹
                         </bk-button>
                     </div>
+                    <div style="width: 100%;display: flex;margin-top: 10px;">
+                        <bk-button :theme="'warning'" :loading="isLoading"
+                            @click="handleSplitArtist" class="mr10"
+                            style="width: 50%;">
+                            拆分合作艺人
+                        </bk-button>
+                        <bk-button :theme="'danger'" :loading="isLoading"
+                            @click="handleCheckDuplicate" class="mr10"
+                            style="width: 50%;">
+                            重复文件检测
+                        </bk-button>
+                    </div>
                     <bk-divider>
                         <div style="color: gray;font-size: 12px;">手动修改参数</div>
                     </bk-divider>
@@ -1076,6 +1088,87 @@
                             return false
                         }
                     }
+                })
+            },
+            handleSplitArtist() {
+                this.$bkInfo({
+                    title: '确认要拆分合作艺人？',
+                    subTitle: '会将 "王力宏/毛不易" 或 "王力宏&毛不易" 拆分为多个独立艺术家',
+                    confirmLoading: true,
+                    confirmFn: () => {
+                        try {
+                            this.isLoading = true
+                            this.$api.Task.splitArtist({
+                                file_full_path: this.filePath,
+                                select_data: this.checkedData,
+                                separator: '/'
+                            }).then((res) => {
+                                this.isLoading = false
+                                if (res.result) {
+                                    const data = res.data
+                                    this.$bkInfo({
+                                        type: 'success',
+                                        title: '拆分完成',
+                                        subTitle: `成功: ${data.success_count}, 失败: ${data.fail_count}, 总计: ${data.total}`,
+                                        showFooter: false,
+                                        extCls: 'split-result-dialog'
+                                    })
+                                    if (data.results && data.results.length > 0) {
+                                        console.log('拆分结果:', data.results)
+                                    }
+                                    this.handleSearchFile()
+                                } else {
+                                    this.$cwMessage('拆分失败', 'error')
+                                }
+                            })
+                            return true
+                        } catch (e) {
+                            console.warn(e)
+                            return false
+                        }
+                    }
+                })
+            },
+            handleCheckDuplicate() {
+                this.isLoading = true
+                this.$api.Task.checkDuplicate({
+                    file_full_path: this.filePath,
+                    select_data: this.checkedData
+                }).then((res) => {
+                    this.isLoading = false
+                    if (res.result) {
+                        const data = res.data
+                        if (data.total_groups === 0) {
+                            this.$bkInfo({
+                                type: 'success',
+                                title: '未发现重复文件',
+                                showFooter: false
+                            })
+                        } else {
+                            const sizeMB = (data.wasted_size / 1024 / 1024).toFixed(1)
+                            let subTitle = `发现 ${data.total_groups} 组重复，共 ${data.total_dup_files} 个文件，冗余约 ${sizeMB} MB`
+                            let content = ''
+                            data.duplicates.forEach(d => {
+                                content += `\n【${d.title}】 - ${d.artist} (${d.count}个)\n`
+                                d.files.forEach((f, i) => {
+                                    content += `  ${i === 0 ? '原始' : '重复'}: ${f.path}\n`
+                                })
+                            })
+                            this.$bkInfo({
+                                type: 'warning',
+                                title: '重复文件检测结果',
+                                subTitle: subTitle,
+                                content: content,
+                                showFooter: false
+                            })
+                            console.log('重复文件:', data.duplicates)
+                        }
+                    } else {
+                        this.$cwMessage('检测失败', 'error')
+                    }
+                }).catch(() => {
+                    this.isLoading = false
+                    this.$cwMessage('检测失败', 'error')
                 })
             },
             changeSorted(element) {

@@ -90,3 +90,16 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class UploadImageSerializer(serializers.Serializer):
     upload_file = serializers.ImageField(required=True)
+
+
+class SplitArtistSerializer(serializers.Serializer):
+    """拆分合作艺人序列化器"""
+    file_full_path = serializers.JSONField(required=True)
+    select_data = serializers.JSONField(required=True)
+    separator = serializers.CharField(required=False, default='/', allow_blank=True)
+
+
+class DuplicateCheckSerializer(serializers.Serializer):
+    """重复文件检测序列化器"""
+    file_full_path = serializers.JSONField(required=True)
+    select_data = serializers.JSONField(required=True)
