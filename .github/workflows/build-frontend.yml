@@ -22,11 +22,6 @@ jobs:
         working-directory: web
         run: npx webpack --config build/webpack.prod.conf.js
 
-      - name: Copy dist to static
-        run: |
-          rm -rf static/dist
-          cp -r web/dist static/dist
-
       - name: Commit built files
         run: |
           git config user.name "github-actions[bot]"
