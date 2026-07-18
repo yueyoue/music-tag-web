@@ -32,26 +32,40 @@
 
 ## 🚀 安装部署
 
+### 前提条件
+
+- 已安装 [Docker](https://docs.docker.com/get-docker/)（版本 20.10+）
+- 已安装 [Docker Compose](https://docs.docker.com/compose/install/)（Docker 自带）
+- 已安装 [Git](https://git-scm.com/downloads)
+
 ### 方式一：Docker Compose（推荐）
 
 适合 NAS（飞牛、群晖等）和 Linux 服务器。
 
 ```bash
-# 克隆项目
+# 1. 克隆项目
 git clone -b dev_1.0 https://github.com/yueyoue/music-tag-web.git
 cd music-tag-web
 
-# 修改 docker-compose.yml 中的音乐目录
-# 将 /path/to/your/music 改为你的音乐文件夹路径
+# 2. 修改配置（必须改两项）
+#    a) docker-compose.yml 中 volumes 的音乐目录
+#       将 /path/to/your/music 改为你的实际音乐文件夹路径
+#    b) MYSQL_ROOT_PASSWORD 和 db 的 MYSQL_ROOT_PASSWORD
+#       改为你自己的密码（两个地方要保持一致）
 
-# 启动（首次会自动构建镜像）
+# 3. 启动（首次会自动构建镜像，约 3-5 分钟）
 docker compose up -d
+
+# 4. 查看日志，等待出现 "Listening at: http://0.0.0.0:8002" 表示启动成功
+docker compose logs -f django
 ```
 
-启动后访问 `http://你的IP:8002`
+启动后访问 `http://你的IP:8002` 即可使用。
 
-> 飞牛 NAS 用户可直接使用 `docker-compose.feiniu.yml`：
-> `docker compose -f docker-compose.feiniu.yml up -d --build`
+> **飞牛 NAS 用户**可直接使用 `docker-compose.feiniu.yml`：
+> ```bash
+> docker compose -f docker-compose.feiniu.yml up -d --build
+> ```
 
 ### 方式二：Docker 单容器
 
@@ -91,6 +105,31 @@ cd ..
 python manage.py migrate
 python manage.py runserver 0.0.0.0:8002
 ```
+
+## ❓ 常见问题
+
+**Q: 默认登录账号密码是什么？**
+A: 首次启动会自动创建数据库，访问 `http://你的IP:8002` 直接使用，无需登录。
+如需管理后台，访问 `http://你的IP:8002/admin/`，默认账号 `admin`，密码 `admin`。
+
+**Q: 如何修改 MySQL 密码？**
+A: 编辑 `docker-compose.yml`，修改两处 `MYSQL_ROOT_PASSWORD`（django 和 db 服务都要改），然后：
+```bash
+docker compose down -v   # 删除旧数据
+docker compose up -d     # 重新启动
+```
+> ⚠️ `down -v` 会删除数据库数据，首次部署前改密码最方便。
+
+**Q: 如何更新到最新版本？**
+```bash
+git pull origin dev_1.0
+docker compose up -d --build
+```
+
+**Q: 端口被占用了怎么办？**
+A: 编辑 `docker-compose.yml`，将 `ports` 中的 `8002:8002` 改为 `其他端口:8002`，例如 `8080:8002`。
+
+---
 
 ## ⚙️ 配置说明
 

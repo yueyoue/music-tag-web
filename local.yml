@@ -7,14 +7,14 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - /path/to/your/music:/app/media:z  # 改为你的音乐文件夹路径
+      - /path/to/your/music:/app/media:z  # 【必改】你的音乐文件夹路径
     restart: always
     environment:
       MYSQL_HOST: db
       MYSQL_PORT: 3306
       MYSQL_DATABASE: music3
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme  # 建议修改密码
+      MYSQL_PASSWORD: changeme  # 【必改】和下面 db 密码保持一致
       REDIS_URL: redis://redis:6379/0
     depends_on:
       - redis
@@ -24,7 +24,7 @@ services:
     build: .
     container_name: music-celery-worker
     volumes:
-      - /path/to/your/music:/app/media:z  # 同上
+      - /path/to/your/music:/app/media:z  # 【必改】同上
     restart: always
     environment:
       MYSQL_HOST: db
@@ -61,7 +61,7 @@ services:
     container_name: music-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: changeme  # 建议修改密码
+      MYSQL_ROOT_PASSWORD: changeme  # 【必改】和上面 django 密码保持一致
       MYSQL_DATABASE: music3
     volumes:
       - mysql_data:/var/lib/mysql
