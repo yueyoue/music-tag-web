@@ -585,7 +585,7 @@
                             })
                         } else {
                             const sizeMB = (data.wasted_size / 1024 / 1024).toFixed(1)
-                            let subTitle = `发现 ${data.total_groups} 组重复，共 ${data.total_dup_files} 个文件，冗余约 ${sizeMB} MB`
+                            const subTitle = `发现 ${data.total_groups} 组重复，共 ${data.total_dup_files} 个文件，冗余约 ${sizeMB} MB`
                             let content = ''
                             data.duplicates.forEach(d => {
                                 content += `\n【${d.title}】 - ${d.artist} (${d.count}个)\n`
