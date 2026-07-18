@@ -1,0 +1,80 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    container_name: music-tag-web
+    ports:
+      - "8002:8002"
+    volumes:
+      - /vol2/1000/音乐:/app/media:rw
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=music3
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=MusicTag2024!
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  celeryworker:
+    build: .
+    container_name: music-celery-worker
+    volumes:
+      - /vol2/1000/音乐:/app/media:rw
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=music3
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=MusicTag2024!
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    command: /start-celeryworker
+
+  celerybeat:
+    build: .
+    container_name: music-celery-beat
+    restart: unless-stopped
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=music3
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=MusicTag2024!
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    command: /start-celerybeat
+
+  redis:
+    image: redis:7-alpine
+    container_name: music-redis
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    container_name: music-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: MusicTag2024!
+      MYSQL_DATABASE: music3
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql_data:
