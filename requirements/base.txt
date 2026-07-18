@@ -10,6 +10,7 @@ python-dateutil==2.8.2
 requests==2.31.0
 gunicorn==22.0.0
 gevent==21.12.0
+zope.interface==6.4
 djangorestframework-jwt==1.11.0
 music-tag==0.4.3
 Pillow==9.4.0
