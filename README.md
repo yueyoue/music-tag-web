@@ -32,7 +32,7 @@ Music Tag Web 是一款自托管 Docker 音乐标签编辑器，可在线编辑�
 
 ## 📦 部署方式
 
-### Docker Compose 部署（推荐）
+### Docker Compose 一键部署（推荐）
 
 1. 创建 `docker-compose.yml`：
 
@@ -46,36 +46,41 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - /path/to/your/music:/app/media:rw
-      - /path/to/your/config:/app/data
+      - /你的音乐路径:/app/media:rw
     restart: unless-stopped
 ```
 
-2. 修改路径：
-   - `/path/to/your/music` → 你的 NAS/服务器音乐文件夹路径
-   - `/path/to/your/config` → 配置持久化目录
+2. 修改 `volumes` 中的音乐路径为你 NAS/服务器上的实际音乐文件夹路径。
 
-3. 拉取镜像并启动：
+3. 启动：
 ```bash
-docker compose pull
 docker compose up -d
 ```
 
-4. 访问：`http://你的IP:8002/admin`
+4. 访问：`http://你的IP:8002`
    - 默认账号：`admin`
-   - 默认密码：`admin`
+   - 默认密码：`123456`
    - **首次登录务必修改密码！**
 
 ### Docker 命令行部署
 
 ```bash
 docker run -d \
+  --name music-tag-web \
   -p 8002:8002 \
-  -v /path/to/your/music:/app/media:rw \
-  -v /path/to/your/config:/app/data \
-  --restart=always \
+  -v /你的音乐路径:/app/media:rw \
+  --restart=unless-stopped \
   ghcr.io/yueyoue/music-tag-web:latest
 ```
+
+## 🔄 更新
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+镜像由 GitHub Actions 自动构建，每次推送代码到 `dev_1.0` 分支会自动发布最新版。
 
 ## 📷 界面预览
 
