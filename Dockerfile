@@ -1,6 +1,7 @@
 FROM python:3.9.12-slim-bullseye as python-build
 
-# 构建阶段：安装依赖
+# 构建阶段：使用国内镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
     libpq-dev \
@@ -16,6 +17,9 @@ RUN pip wheel --wheel-dir /usr/src/app/wheels \
 
 # 运行阶段
 FROM python:3.9.12-slim-bullseye
+
+# 使用国内镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
 
 LABEL title="Music Tag Web"
 LABEL description="音乐标签编辑器 - 基于 xhongc/music-tag-web fork"
