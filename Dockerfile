@@ -32,7 +32,6 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     libpq-dev \
     gettext \
     default-libmysqlclient-dev \
-    nodejs \
     ffmpeg \
     && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
     && rm -rf /var/lib/apt/lists/*
@@ -42,15 +41,8 @@ COPY --from=python-build /usr/src/app/wheels /wheels/
 RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
 
-# 复制应用代码
+# 复制应用代码（前端静态文件已在 static/dist/ 中）
 COPY . ${APP_HOME}
-
-# 构建前端静态文件
-RUN cd web && npm install && npm run build && cd ..
-
-# 数据库迁移 & 收集静态文件
-RUN python manage.py migrate --run-syncdb || true
-RUN python manage.py collectstatic --noinput || true
 
 # 启动脚本
 RUN echo '#!/bin/bash\n\
