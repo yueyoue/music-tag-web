@@ -41,7 +41,7 @@ version: '3'
 
 services:
   music-tag:
-    image: xhongc/music_tag_web:latest
+    image: ghcr.io/yueyoue/music-tag-web:latest
     container_name: music-tag-web
     ports:
       - "8002:8002"
@@ -55,8 +55,9 @@ services:
    - `/path/to/your/music` → 你的 NAS/服务器音乐文件夹路径
    - `/path/to/your/config` → 配置持久化目录
 
-3. 启动：
+3. 拉取镜像并启动：
 ```bash
+docker compose pull
 docker compose up -d
 ```
 
@@ -73,7 +74,7 @@ docker run -d \
   -v /path/to/your/music:/app/media:rw \
   -v /path/to/your/config:/app/data \
   --restart=always \
-  xhongc/music_tag_web:latest
+  ghcr.io/yueyoue/music-tag-web:latest
 ```
 
 ## 📷 界面预览
