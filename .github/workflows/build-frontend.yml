@@ -31,6 +31,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add static/dist static/js static/css static/fonts static/img
+          git add static/
           git diff --cached --quiet || git commit -m "build: update frontend dist [skip ci]"
           git push
