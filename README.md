@@ -1,148 +1,141 @@
 ![](music-tag.png)
 
-# 🎵 Music Tag Web V2
+# 🚀 Music Tag Web | 音乐标签编辑器
 
-音乐标签 Web 版 —— 可在浏览器中编辑歌曲的标题、专辑、艺术家、歌词、封面等元数据信息。
+[简体中文](README.md) | [English](readme_en.md)
 
-支持 FLAC、APE、WAV、AIFF、WV、TTA、MP3、MP4、M4A、OGG、MPC、OPUS、WMA、DSF、DFF 等音频格式。
+> 基于 [xhongc/music-tag-web](https://github.com/xhongc/music-tag-web) (GPL v3.0) 二次开发，新增拆分合作艺人、重复文件检测等功能。
 
-基于 [xhongc/music-tag-web](https://github.com/xhongc/music-tag-web) 二次开发。
+## 项目简介
 
-## ✨ 功能特性
+Music Tag Web 是一款自托管 Docker 音乐标签编辑器，专为 NAS、远程影音服务器打造，可在线编辑歌曲标题、专辑、艺术家、歌词、专辑封面等完整音频元数据，完美作为 Navidrome 配套边车工具。
 
-### 核心功能
-- 📝 批量编辑音乐标签（标题、艺术家、专辑、风格、年份、歌词、封面）
-- 🔍 从网易云音乐、QQ音乐、咪咕音乐自动获取标签信息
-- 📂 文件浏览器，支持文件夹导航
-- 🎨 自动/手动修改标签
-- 📁 整理文件夹（按艺术家/专辑归类）
+支持 FLAC, APE, WAV, AIFF, WV, TTA, MP3, M4A, OGG, MPC, OPUS, WMA, DSF, DFF 全格式音频 ID3 标签批量编辑、刮削、修复整理。
 
-### V2 新增功能
-- 🎵 Subsonic API（可对接 Subsonic 兼容播放器）
-- 📋 歌单管理
-- 🔎 搜索功能
-- 🎤 QQ 音乐元数据来源
-- 🖥️ SimpleUI 管理后台
-- 🕐 最近播放记录
-- 📦 gzip 压缩传输
+## 🎉 核心功能
 
-### 自定义功能
-- ✂️ **拆分合作艺人** — 自动将 "王力宏/毛不易" 或 "王力宏&毛不易" 拆分为多个独立艺术家
-- 🔁 **重复文件检测** — 按标题+艺术家分组检测重复歌曲，显示冗余文件大小
+- 全格式音频文件元数据查看、单条/批量编辑、修复 ID3 标签
+- 批量自动刮削音乐标签，自动匹配专辑信息、艺术家、歌词、封面
+- 内置音乐指纹识别（AcoustID），无标签歌曲自动识别匹配元数据
+- 智能整理本地音乐文件，按艺术家、专辑自动分组
+- 多维度文件排序：文件名、文件大小、文件更新时间
+- 批量繁简转换，一键转换歌曲标签简体/繁体
+- 文件名拆分解包，自动从文件名提取歌曲信息
+- 批量文本替换，清理曲库脏标签、乱码
+- 内嵌歌词翻译，批量双语歌词写入音频文件
+- 批量导出/自定义上传替换专辑封面
+- 全响应式移动端 UI，手机浏览器远程访问
 
-## 🚀 安装部署
+### ✂️ 自定义新增功能
+
+- **拆分合作艺人** — 自动将 `"王力宏/毛不易"` 或 `"王力宏&毛不易"` 拆分为多个独立艺术家
+- **重复文件检测** — 按标题+艺术家分组检测重复歌曲，显示冗余文件大小和完整路径
+
+## 💯 使用部署指南
 
 ### 前提条件
 
-- 已安装 [Docker](https://docs.docker.com/get-docker/)（版本 20.10+）
-- 已安装 [Docker Compose](https://docs.docker.com/compose/install/)（Docker 自带）
-- 已安装 [Git](https://git-scm.com/downloads)
+- 已安装 Docker（版本 20.10+）
+- 已安装 Docker Compose（Docker 自带）
 
-### 方式一：Docker Compose（推荐）
+### 方式一：Docker Compose 部署（推荐）
 
-适合 NAS（飞牛、群晖等）和 Linux 服务器。
+创建 `docker-compose.yml` 文件：
+
+```yaml
+services:
+  music-tag:
+    image: ghcr.io/yueyoue/music-tag-web:latest
+    container_name: music-tag-web
+    ports:
+      - "8002:8002"
+    volumes:
+      - /path/to/your/music:/app/media:rw
+      - /path/to/your/config:/app/data
+    restart: unless-stopped
+```
+
+> **重要**：将 `/path/to/your/music` 替换为你的 NAS/服务器本地音乐文件夹路径！
+> 将 `/path/to/your/config` 替换为配置持久化目录！
+
+启动：
 
 ```bash
-# 1. 克隆项目
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
+等待出现 `Listening at: http://0.0.0.0:8002` 表示启动成功。
+
+### 方式二：Docker 命令行部署
+
+```bash
+docker run -d \
+  -p 8002:8002 \
+  -v /path/to/your/music:/app/media:rw \
+  -v /path/to/your/config:/app/data \
+  --restart=always \
+  --name music-tag-web \
+  ghcr.io/yueyoue/music-tag-web:latest
+```
+
+### 方式三：本地构建部署
+
+```bash
 git clone -b dev_1.0 https://github.com/yueyoue/music-tag-web.git
 cd music-tag-web
-
-# 2. 修改配置（必须改两项）
-#    a) docker-compose.yml 中 volumes 的音乐目录
-#       将 /path/to/your/music 改为你的实际音乐文件夹路径
-#    b) MYSQL_ROOT_PASSWORD 和 db 的 MYSQL_ROOT_PASSWORD
-#       改为你自己的密码（两个地方要保持一致）
-
-# 3. 启动（首次会自动构建镜像，约 3-5 分钟）
+docker build -t music-tag-web:latest .
 docker compose up -d
-
-# 4. 查看日志，等待出现 "Listening at: http://0.0.0.0:8002" 表示启动成功
-docker compose logs -f django
 ```
+
+### 访问
 
 启动后访问 `http://你的IP:8002` 即可使用。
 
-> **飞牛 NAS 用户**可直接使用 `docker-compose.feiniu.yml`：
-> ```bash
-> docker compose -f docker-compose.feiniu.yml up -d --build
-> ```
+管理后台：`http://你的IP:8002/admin/`，默认账号 `admin`，默认密码 `admin`。
 
-### 方式二：Docker 单容器
+**首次登录务必修改默认密码！**
 
-需要先准备好 MySQL 和 Redis，或使用已有的。
+## 🔄 更新版本
+
+### 使用预构建镜像（推荐）
 
 ```bash
-# 构建镜像
-docker build -t music-tag-web .
+# 拉取最新镜像
+docker compose pull
 
-# 运行
-docker run -d \
-  -p 8002:8002 \
-  -v /path/to/your/music:/app/media \
-  -e MYSQL_HOST=你的MySQL地址 \
-  -e MYSQL_PORT=3306 \
-  -e MYSQL_DATABASE=music3 \
-  -e MYSQL_USER=root \
-  -e MYSQL_PASSWORD=你的密码 \
-  -e REDIS_URL=redis://你的Redis地址:6379/0 \
-  --name music-tag-web \
-  music-tag-web
+# 重启容器
+docker compose up -d
 ```
 
-### 方式三：本地开发
+### 本地构建更新
 
 ```bash
-# 安装后端依赖
-pip install -r requirements.txt
+# 拉取最新代码
+git pull origin dev_1.0
 
-# 安装前端依赖
-cd web
-npm install --registry https://registry.npmmirror.com
-npx webpack --config build/webpack.prod.conf.js
-cd ..
-
-# 启动服务
-python manage.py migrate
-python manage.py runserver 0.0.0.0:8002
+# 重新构建并启动
+docker compose up -d --build
 ```
 
 ## ❓ 常见问题
 
-**Q: 默认登录账号密码是什么？**
-A: 首次启动会自动创建数据库，访问 `http://你的IP:8002` 直接使用，无需登录。
-如需管理后台，访问 `http://你的IP:8002/admin/`，默认账号 `admin`，密码 `admin`。
-
-**Q: 如何修改 MySQL 密码？**
-A: 编辑 `docker-compose.yml`，修改两处 `MYSQL_ROOT_PASSWORD`（django 和 db 服务都要改），然后：
-```bash
-docker compose down -v   # 删除旧数据
-docker compose up -d     # 重新启动
-```
-> ⚠️ `down -v` 会删除数据库数据，首次部署前改密码最方便。
-
-**Q: 如何更新到最新版本？**
-```bash
-git pull origin dev_1.0
-docker compose up -d --build
-```
+**Q: 默认账号密码是什么？**
+A: 管理后台默认 `admin` / `admin`，首次登录请修改密码。
 
 **Q: 端口被占用了怎么办？**
-A: 编辑 `docker-compose.yml`，将 `ports` 中的 `8002:8002` 改为 `其他端口:8002`，例如 `8080:8002`。
+A: 编辑 `docker-compose.yml`，将 `8002:8002` 改为 `其他端口:8002`，例如 `8080:8002`。
 
----
+**Q: 如何修改音乐目录？**
+A: 编辑 `docker-compose.yml`，修改 `volumes` 中的路径，然后 `docker compose up -d` 重启。
 
-## ⚙️ 配置说明
-
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| MYSQL_HOST | db | MySQL 主机地址 |
-| MYSQL_PORT | 3306 | MySQL 端口 |
-| MYSQL_DATABASE | music3 | 数据库名 |
-| MYSQL_USER | root | MySQL 用户名 |
-| MYSQL_PASSWORD | - | MySQL 密码 |
-| REDIS_URL | redis://redis:6379/0 | Redis 连接地址 |
-
-音乐目录通过 Docker volume 映射到容器内的 `/app/media`。
+**Q: 支持哪些音频格式？**
+A: FLAC, APE, WAV, AIFF, WV, TTA, MP3, M4A, OGG, MPC, OPUS, WMA, DSF, DFF。
 
 ## 📷 界面截图
 
@@ -150,25 +143,17 @@ A: 编辑 `docker-compose.yml`，将 `ports` 中的 `8002:8002` 改为 `其他�
 ![img_3.png](img_3.png)
 ![img_2.png](img_2.png)
 
-## 📌 前端开发
+## 📝 开发文档
 
-修改前端代码后，需要重新编译：
-
-```bash
-cd web
-npm install --registry https://registry.npmmirror.com
-npx webpack --config build/webpack.prod.conf.js
-```
-
-也可以在 GitHub 上手动触发 Actions 自动编译：进入 Actions → Build Frontend → Run workflow。
+详见 [DEV.md](DEV.md)，包含项目结构、API 接口、数据模型、新增功能实现细节等。
 
 ## 💬 反馈
 
-欢迎提出 Issues，我会尽量满足需求。
+欢迎提交 [Issues](https://github.com/yueyoue/music-tag-web/issues)。
 
 ## 免责声明
 
-禁止任何形式的商业用途，包括但不仅限于售卖/打赏/获利，不得使用本代码进行任何形式的牟利/贩卖/传播，再次强调仅供个人私下研究学习技术使用，有条件者请支持正版音乐！
+禁止任何形式的商业用途，包括但不仅限于售卖/打赏/获利，不得使用本代码进行任何形式的牟利/贩卖/传播，仅供个人私下研究学习使用。
 
 本项目基于 GPL V3.0 许可证发行。数据来源是从各官方音乐平台的公开服务器中拉取，本项目不对数据的准确性负责。使用者务必在24小时内清除使用本项目过程中所产生的版权数据。
 
