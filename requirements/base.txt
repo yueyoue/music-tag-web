@@ -25,3 +25,4 @@ PyExecJS==1.5.1
 tqdm==4.65.0
 lxml==4.9.1
 pathos==0.3.1
+django-simpleui==2022.12.12
