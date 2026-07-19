@@ -27,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 
 WORKDIR ${APP_HOME}
 
-# 安装运行时依赖
+# 安装运行时依赖（与原项目一致）
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libpq-dev \
     gettext \
@@ -41,13 +41,10 @@ COPY --from=python-build /usr/src/app/wheels /wheels/
 RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
 
-# 复制应用代码
+# 复制应用代码（前端静态文件已在 static/js/ 和 static/dist/ 中）
 COPY . ${APP_HOME}
 
-# 收集 Django 静态文件（simpleui 主题等）
-RUN DJANGO_SETTINGS_MODULE=django_vue_cli.settings python manage.py collectstatic --noinput 2>/dev/null || true
-
-# 启动脚本
+# 启动脚本（与原项目一致，端口改为 8002）
 RUN printf '#!/bin/bash\nset -o errexit\nset -o pipefail\nset -o nounset\n\npython manage.py migrate --run-syncdb\ngunicorn -w 2 -b 0.0.0.0:8002 django_vue_cli.wsgi:application --timeout 120 --worker-class=gevent\n' > /start \
     && chmod +x /start
 
