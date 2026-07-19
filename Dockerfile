@@ -1,7 +1,6 @@
 FROM python:3.9.12-slim-bullseye as python-build
 
-# 构建阶段：使用国内镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+# 构建阶段：编译 Python 依赖
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
     libpq-dev \
@@ -18,9 +17,6 @@ RUN pip wheel --wheel-dir /usr/src/app/wheels \
 # 运行阶段
 FROM python:3.9.12-slim-bullseye
 
-# 使用国内镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-
 LABEL title="Music Tag Web"
 LABEL description="音乐标签编辑器 - 基于 xhongc/music-tag-web fork"
 LABEL authors="yueyoue"
@@ -31,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 
 WORKDIR ${APP_HOME}
 
-# 安装运行时依赖
+# 安装运行时依赖（与原项目一致）
 RUN apt-get update && apt-get install --no-install-recommends -y \
     libpq-dev \
     gettext \
@@ -42,18 +38,15 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 # 安装 Python 依赖
 COPY --from=python-build /usr/src/app/wheels /wheels/
-RUN pip install --no-cache-dir 'setuptools>=68.0.0,<72.0.0' \
-    && pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
+RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
     && rm -rf /wheels/
 
 # 复制应用代码（前端静态文件已在 static/dist/ 中）
 COPY . ${APP_HOME}
 
-# 启动脚本
-RUN echo '#!/bin/bash\n\
-python manage.py migrate --run-syncdb\n\
-gunicorn -w 2 -b 0.0.0.0:8002 django_vue_cli.wsgi:application --timeout 120 --worker-class=gevent\n\
-' > /start && chmod +x /start
+# 启动脚本（端口 8002，与 V2 一致）
+RUN printf '#!/bin/bash\nset -o errexit\nset -o pipefail\nset -o nounset\n\npython manage.py migrate --run-syncdb\ngunicorn -w 2 -b 0.0.0.0:8002 django_vue_cli.wsgi:application --timeout 120 --worker-class=gevent\n' > /start \
+    && chmod +x /start
 
 EXPOSE 8002
 
