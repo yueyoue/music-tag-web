@@ -15,7 +15,8 @@ admin.site.site_title = "音乐管理系统 ｜ Music Tag"
 # schema_view = get_schema_view(title='API', renderer_classes=[SwaggerUIRenderer])
 
 urlpatterns = [
-    path('', index),
+    # 捕获所有未匹配的路径，交给 Vue SPA 处理前端路由
+    re_path(r'^.*$', index),
     path('admin/', admin.site.urls),
     # re_path(r"^docs/", schema_view, name='swagger'),
     re_path(r"^api/", include(task_router.urls)),

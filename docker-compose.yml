@@ -2,7 +2,7 @@ version: '3'
 
 services:
   django:
-    build: .
+    image: ghcr.io/yueyoue/music-tag-web:latest
     container_name: music-tag-web
     ports:
       - "8002:8002"
@@ -21,7 +21,7 @@ services:
       - db
     command: /start
   celeryworker:
-    build: .
+    image: ghcr.io/yueyoue/music-tag-web:latest
     container_name: music-celery-worker
     volumes:
       - /path/to/your/music:/app/media:z  # 【必改】同上
@@ -38,7 +38,7 @@ services:
       - db
     command: /start-celeryworker
   celerybeat:
-    build: .
+    image: ghcr.io/yueyoue/music-tag-web:latest
     container_name: music-celery-beat
     restart: always
     environment:
