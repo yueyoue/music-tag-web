@@ -7,24 +7,19 @@ from applications.user.urls import router as user_router
 from applications.subsonic.urls import router as subsonic_router
 from django.views import static
 from rest_framework_jwt.views import obtain_jwt_token
-# from rest_framework.schemas import get_schema_view
-# from rest_framework_swagger.renderers import SwaggerUIRenderer
 
 admin.site.site_header = "音乐管理系统"
 admin.site.site_title = "音乐管理系统 ｜ Music Tag"
-# schema_view = get_schema_view(title='API', renderer_classes=[SwaggerUIRenderer])
 
 urlpatterns = [
-    # 捕获所有未匹配的路径，交给 Vue SPA 处理前端路由
-    re_path(r'^.*$', index),
     path('admin/', admin.site.urls),
-    # re_path(r"^docs/", schema_view, name='swagger'),
     re_path(r"^api/", include(task_router.urls)),
     re_path(r"^rest/", include(subsonic_router.urls)),
     re_path(r"^user/", include(user_router.urls)),
     re_path(r'^api/token/', obtain_jwt_token),
-    # nginx 处理了静态文件
     re_path(r'^static/(?P<path>.*)$', static.serve,
             {'document_root': settings.STATIC_ROOT}, name='static'),
     re_path(r'^media/(?P<path>.*)$', static.serve, {'document_root': settings.MEDIA_ROOT}),
+    # 捕获所有未匹配的路径，交给 Vue SPA 处理前端路由（必须放最后）
+    re_path(r'^.*$', index),
 ]
